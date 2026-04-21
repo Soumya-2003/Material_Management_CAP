@@ -1,0 +1,26 @@
+{
+  "xsappname": "Material_Management",
+  "tenant-mode": "dedicated",
+  "scopes": [
+    {
+      "name": "$XSAPPNAME.Employee",
+      "description": "Employee Scope"
+    },
+    {
+      "name": "$XSAPPNAME.Manager",
+      "description": "Manager Scope"
+    }
+  ],
+  "role-templates": [
+    {
+      "name": "EMPLOYEE",
+      "description": "Role for Regular Employees",
+      "scope-references": ["$XSAPPNAME.Employee"]
+    },
+    {
+      "name": "MANAGER",
+      "description": "Role for Managers",
+      "scope-references": ["$XSAPPNAME.Manager"]
+    }
+  ]
+}

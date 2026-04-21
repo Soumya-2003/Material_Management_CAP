@@ -1,0 +1,84 @@
+{
+  "name": "Material_Management",
+  "version": "1.0.0",
+  "dependencies": {
+    "@cap-js/hana": "^2",
+    "@sap-cloud-sdk/http-client": "^4.6.0",
+    "@sap-cloud-sdk/resilience": "^4.6.0",
+    "@sap/cds": "^9",
+    "@sap/xssec": "^4"
+  },
+  "devDependencies": {
+    "@cap-js/sqlite": "^2",
+    "@sap/cds-dk": "^9",
+    "mbt": "^1.2.29",
+    "rimraf": "^5.0.5"
+  },
+  "scripts": {
+    "start": "cds-serve",
+    "watch-mm-fiori-ui": "cds watch --open mmfioriui/index.html?sap-ui-xx-viewCache=false --livereload false",
+    "undeploy": "cf undeploy Material_Management --delete-services --delete-service-keys --delete-service-brokers",
+    "build": "rimraf resources mta_archives && mbt build --mtar archive",
+    "deploy": "cf deploy mta_archives/archive.mtar --retries 1"
+  },
+  "private": true,
+  "cds": {
+    "requires": {
+      "auth": {
+        "kind": "basic",
+        "users": {
+          "EMP001": {
+            "password": "123",
+            "roles": [
+              "EMPLOYEE"
+            ]
+          },
+          "EMP002": {
+            "password": "123",
+            "roles": [
+              "EMPLOYEE"
+            ]
+          },
+          "EMP003": {
+            "password": "123",
+            "roles": [
+              "EMPLOYEE"
+            ]
+          },
+          "EMP004": {
+            "password": "123",
+            "roles": [
+              "EMPLOYEE"
+            ]
+          },
+          "MGR001": {
+            "password": "123",
+            "roles": [
+              "MANAGER"
+            ]
+          },
+          "MGR002": {
+            "password": "123",
+            "roles": [
+              "MANAGER"
+            ]
+          }
+        }
+      },
+      "connectivity": true,
+      "destinations": true,
+      "bpaWorkflow-destination": {
+        "kind": "rest",
+        "credentials": {
+          "destination": "bpaWorkflow-destination"
+        }
+      }
+    }
+  },
+  "sapux": [
+    "app/mm-fiori-ui"
+  ],
+  "workspaces": [
+    "app/*"
+  ]
+}

@@ -1,0 +1,11 @@
+ID,name,description,unit,price,isActive
+f47ac10b-58cc-4372-a567-0e02b2c3d479,Laptop,Office Laptop,EA,75000,true
+550e8400-e29b-41d4-a716-446655440000,Mouse,Wireless Mouse,EA,500,true
+67c2621a-1f3c-473d-9781-64197368d712,Keyboard,Mechanical Keyboard,EA,1500,true
+a3b2c1d4-e5f6-47a8-b9c0-d1e2f3a4b5c6,Monitor,24 inch LED Monitor,EA,12000,true
+9f8e7d6c-5b4a-4321-8765-0987654321ba,Printer,All-in-One Printer,EA,18000,true
+123e4567-e89b-12d3-a456-426614174000,Desk,Office Desk,EA,7000,true
+7c9e6679-7425-40de-944b-e07fc1f90ae7,Chair,Ergonomic Chair,EA,9000,true
+3d2b1a0c-9f8e-4d7c-bc6a-543210fedcba,USB Drive,64GB USB 3.0,EA,800,true
+e2a1b3c4-d5e6-4f7a-8b9c-0d1e2f3a4b5c,Router,WiFi Router,EA,3500,true
+b0e1d2c3-a4b5-4678-9012-3456789abcde,Headphones,Noise Cancelling Headphones,EA,6000,true

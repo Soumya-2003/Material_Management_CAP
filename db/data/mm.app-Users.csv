@@ -1,0 +1,5 @@
+ID,userId,name,email,role,managerId_ID,department,vendorRatingThreshold
+8f3e2b1a-5c6d-4e7f-9a8b-0c1d2e3f4a5b,MGR001,Rajesh Sharma,rajesh.sharma@company.com,MANAGER,,Procurement,3
+d9b8c7a6-e5f4-4321-8765-43210fedcba9,MGR002,Anita Verma,anita.verma@company.com,MANAGER,,Warehouse,4
+5a4b3c2d-1e0f-4987-bdca-6543210fedcb,EMP001,Amit Das,amit.das@company.com,EMPLOYEE,8f3e2b1a-5c6d-4e7f-9a8b-0c1d2e3f4a5b,Procurement,0
+f1e2d3c4-b5a6-4789-8a7b-6c5d4e3f2a1b,EMP002,Priya Sen,priya.sen@company.com,EMPLOYEE,d9b8c7a6-e5f4-4321-8765-43210fedcba9,Warehouse,0
