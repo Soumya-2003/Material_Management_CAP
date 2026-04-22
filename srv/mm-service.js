@@ -1,5 +1,5 @@
 const cds = require('@sap/cds');
-const { executeHttpRequest } = require('@sap-cloud-sdk/http-client');
+// const { executeHttpRequest } = require('@sap-cloud-sdk/http-client');
 
 module.exports = cds.service.impl(async function () {
 
@@ -96,14 +96,14 @@ module.exports = cds.service.impl(async function () {
 
         await DELETE.from(DraftPurchaseRequisitions).where({ ID: draftID });
 
-        await triggerWorkflow({
-            prID: prID,
-            prNumber: draft.prNumber,
-            requester: 'EMP001',
-            manager: 'MGR001',
-            vendorRating: parseInt(vendorRating, 10) || 0,
-            totalAmount: parseFloat(draft.totalAmount) || 0
-        });
+        // await triggerWorkflow({
+        //     prID: prID,
+        //     prNumber: draft.prNumber,
+        //     requester: 'EMP001',
+        //     manager: 'MGR001',
+        //     vendorRating: parseInt(vendorRating, 10) || 0,
+        //     totalAmount: parseFloat(draft.totalAmount) || 0
+        // });
 
         return prID;
     });
@@ -136,7 +136,8 @@ module.exports = cds.service.impl(async function () {
         const items = await SELECT.from(PR_Items).where({ pr_ID: prID });
         if (!items || items.length === 0) return;
         
-        const prItem = items; 
+        const prItem = items[0]; 
+        
         const poID = cds.utils.uuid();
 
         // 1. Create PO Header
