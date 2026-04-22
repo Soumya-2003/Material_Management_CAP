@@ -44,12 +44,19 @@ entity VendorMaterials {
 entity DraftPurchaseRequisitions {
     key ID        : UUID;
     prNumber      : String(20);
-    material_ID   : UUID;
-    vendor_ID     : UUID;
-    quantity      : Integer;
     totalAmount   : Decimal(15,2);
     status        : String default 'DRAFT';
     createdAt     : Timestamp;
+    items       : Composition of many DraftPR_Items on items.draft = $self;
+}
+
+entity DraftPR_Items {
+    key ID          : UUID;
+        draft       : Association to DraftPurchaseRequisitions;
+        material : Association to Materials;
+        vendor   : Association to Vendors;
+        quantity    : Integer;
+        price       : Decimal(15, 2);
 }
 
 entity PurchaseRequisitions {
@@ -69,6 +76,7 @@ entity PR_Items {
     vendor    : Association to Vendors;
     quantity      : Integer;
     price     : Decimal(15, 2);
+    status      : String default 'IN_APPROVAL';
 }
 
 entity PurchaseOrders {
