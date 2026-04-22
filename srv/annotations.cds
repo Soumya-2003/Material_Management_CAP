@@ -22,9 +22,33 @@ annotate MMService.PurchaseRequisitions with @(
         LineItem: [
             { $Type: 'UI.DataField', Value: prNumber, Label: 'PR Number' },
             { $Type: 'UI.DataField', Value: totalAmount, Label: 'Total Amount' },
-            { $Type: 'UI.DataField', Value: status, Label: 'Status' },
+            { $Type: 'UI.DataField', Value: status, Label: 'Status', Criticality: statusCriticality },
             { $Type: 'UI.DataField', Value: createdAt, Label: 'Created At' }
         ],
+
+        HeaderFacets: [
+            {
+                $Type: 'UI.ReferenceFacet',
+                Target: '@UI.DataPoint#Status',
+                ID: 'StatusHeaderFacet'
+            },
+            {
+                $Type: 'UI.ReferenceFacet',
+                Target: '@UI.DataPoint#TotalAmount',
+                ID: 'TotalAmountHeaderFacet'
+            }
+        ],
+
+        // Data Points for the Header Facets
+        DataPoint#Status: {
+            Value: status,
+            Title: 'Current Status',
+            Criticality: statusCriticality
+        },
+        DataPoint#TotalAmount: {
+            Value: totalAmount,
+            Title: 'Total Value'
+        },
 
         // Object Page Layout (Facets)
         Facets: [
@@ -46,8 +70,8 @@ annotate MMService.PurchaseRequisitions with @(
         FieldGroup#GeneralInfo: {
             Data: [
                 { $Type: 'UI.DataField', Value: prNumber, Label: 'PR Number' },
-                { $Type: 'UI.DataField', Value: status, Label: 'Status' },
-                { $Type: 'UI.DataField', Value: totalAmount, Label: 'Total Amount' },
+                // { $Type: 'UI.DataField', Value: status, Label: 'Status' },
+                // { $Type: 'UI.DataField', Value: totalAmount, Label: 'Total Amount' },
                 { $Type: 'UI.DataField', Value: createdAt, Label: 'Created At' }
             ]
         }
@@ -59,10 +83,9 @@ annotate MMService.PurchaseRequisitions with @(
 // ---------------------------------------------------------------------------
 annotate MMService.PR_Items with @(
     UI: {
-        // Columns for the Items table on the Object Page
         LineItem: [
-            { $Type: 'UI.DataField', Value: material_ID, Label: 'Material ID' },
-            { $Type: 'UI.DataField', Value: vendor_ID, Label: 'Vendor ID' },
+            { $Type: 'UI.DataField', Value: materialName, Label: 'Material' },
+            { $Type: 'UI.DataField', Value: vendorName, Label: 'Vendor' },
             { $Type: 'UI.DataField', Value: quantity, Label: 'Quantity' },
             { $Type: 'UI.DataField', Value: price, Label: 'Unit Price' }
         ]
@@ -77,8 +100,38 @@ annotate MMService.PurchaseRequisitions with {
     prNumber @readonly;
     createdAt @readonly;
     totalAmount @readonly;
+
+    status @(
+        Common.ValueListWithFixedValues: true
+    );
 };
 
 annotate MMService.PR_Items with {
     ID @UI.Hidden;
+
+    material_ID @(
+        Common.Text            : materialName,
+        Common.TextArrangement : #TextOnly,
+        Common.ValueList       : {
+            Label          : 'Materials',
+            CollectionPath : 'Materials',
+            Parameters     : [
+                { $Type : 'Common.ValueListParameterInOut', LocalDataProperty : material_ID, ValueListProperty : 'ID' },
+                { $Type : 'Common.ValueListParameterDisplayOnly', ValueListProperty : 'name' }
+            ]
+        }
+    );
+
+    vendor_ID @(
+        Common.Text            : vendorName,
+        Common.TextArrangement : #TextOnly,
+        Common.ValueList       : {
+            Label          : 'Vendors',
+            CollectionPath : 'Vendors',
+            Parameters     : [
+                { $Type : 'Common.ValueListParameterInOut', LocalDataProperty : vendor_ID, ValueListProperty : 'ID' },
+                { $Type : 'Common.ValueListParameterDisplayOnly', ValueListProperty : 'name' }
+            ]
+        }
+    );
 };
