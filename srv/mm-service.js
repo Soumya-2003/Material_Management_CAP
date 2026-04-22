@@ -5,6 +5,7 @@ module.exports = cds.service.impl(async function () {
 
     const {
         DraftPurchaseRequisitions,
+        DraftPR_Items,
         PurchaseRequisitions,
         PR_Items,
         PurchaseOrders,
@@ -16,17 +17,19 @@ module.exports = cds.service.impl(async function () {
         Stocks
     } = this.entities;
 
-    this.after('READ', PurchaseRequisitions, each => {
+    this.after('READ', [PurchaseRequisitions, PR_Items], each => {
         if (!each.status) return; // Skip if status wasn't requested in the query
         
         switch (each.status) {
             case 'APPROVED':
+            case 'COMPLETED':
                 each.statusCriticality = 3; // 3 = Green
                 break;
             case 'REJECTED':
                 each.statusCriticality = 1; // 1 = Red
                 break;
             case 'IN_APPROVAL':
+            case 'PARTIALLY_APPROVED':
                 each.statusCriticality = 2; // 2 = Orange
                 break;
             case 'DRAFT':
@@ -37,24 +40,45 @@ module.exports = cds.service.impl(async function () {
     });
 
     this.on('saveDraft', async (req) => {
-        const { ID, material_ID, vendor_ID, quantity } = req.data;
-        let totalAmount = 0;
-       
-        if (material_ID) {
-            const material = await SELECT.one.from(Materials).where({ ID: material_ID });
-            if (material) {
-                totalAmount = (quantity || 0) * material.price;
+        try {
+            const { ID, items } = req.data;
+            let totalAmount = 0;
+           
+            // 1. Clear out the old cart items
+            await DELETE.from(DraftPR_Items).where({ draft_ID: ID });
+
+            const newItems = [];
+            // Safely iterate even if items is null
+            for (let item of (items || [])) {
+                const material = await SELECT.one.from(Materials).where({ ID: item.material_ID });
+                let price = material ? material.price : 0;
+                totalAmount += (item.quantity * price);
+
+                newItems.push({
+                    ID: cds.utils.uuid(),
+                    draft_ID: ID,
+                    material_ID: item.material_ID, 
+                    vendor_ID: item.vendor_ID,     
+                    quantity: item.quantity,
+                    price: price
+                });
             }
+
+            // 2. Insert the new cart items
+            if (newItems.length > 0) {
+                await INSERT.into(DraftPR_Items).entries(newItems);
+            }
+
+            // 3. Update the Header
+            await UPDATE(DraftPurchaseRequisitions).set({ totalAmount }).where({ ID });
+
+            return ID;
+
+        } catch (error) {
+            // This prevents the 502 Server Crash!
+            console.error("!!! CAP Server Error in saveDraft !!!", error);
+            return req.error(500, "Backend failed to save draft: " + error.message);
         }
-
-        await UPDATE(DraftPurchaseRequisitions).set({
-            material_ID,
-            vendor_ID,
-            quantity,
-            totalAmount
-        }).where({ ID });;
-
-        return ID;
     });
 
     this.on('createDraft', async () => {
@@ -92,13 +116,10 @@ module.exports = cds.service.impl(async function () {
         const { draftID } = req.data;
 
         const draft = await SELECT.one.from(DraftPurchaseRequisitions).where({ ID: draftID });
+        const draftItems = await SELECT.from(DraftPR_Items).where({ draft_ID: draftID });
         if (!draft) req.error(404, "Draft not found");
 
-        const material = await SELECT.one.from(Materials).where({ ID: draft.material_ID });
-        const vendor = await SELECT.one.from(Vendors).where({ ID: draft.vendor_ID });
-        const vendorRating = vendor ? vendor.rating : 3;
-
-        const prID = cds.utils.uuid();
+        const prID = cds.utils.uuid();        
         
         await INSERT.into(PurchaseRequisitions).entries({
             ID: prID,
@@ -108,15 +129,21 @@ module.exports = cds.service.impl(async function () {
             createdAt: new Date().toISOString()
         });
 
-        await INSERT.into(PR_Items).entries({
+        const prItemsToInsert = draftItems.map(item => ({
             ID: cds.utils.uuid(),
             pr_ID: prID,
-            material_ID: draft.material_ID,
-            vendor_ID: draft.vendor_ID,
-            quantity: draft.quantity,
-            price: material.price 
-        });
+            material_ID: item.material_ID,
+            vendor_ID: item.vendor_ID,
+            quantity: item.quantity,
+            price: item.price,
+            status: 'IN_APPROVAL'
+        }));
 
+        if (prItemsToInsert.length > 0) {
+            await INSERT.into(PR_Items).entries(prItemsToInsert);
+        }
+
+        await DELETE.from(DraftPR_Items).where({ draft_ID: draftID });
         await DELETE.from(DraftPurchaseRequisitions).where({ ID: draftID });
 
         // await triggerWorkflow({
@@ -131,48 +158,69 @@ module.exports = cds.service.impl(async function () {
         return prID;
     });
 
-    this.on('approvePR', async (req) => {
-        const { prID } = req.data;
-        const pr = await SELECT.one.from(PurchaseRequisitions).where({ ID: prID });
-        
-        if (!pr || pr.status !== 'IN_APPROVAL') req.error(400, 'PR not found or not in approval state');
-        
+    this.on('approvePRItem', async (req) => {
+        const { itemID } = req.data;
+        const item = await SELECT.one.from(PR_Items).where({ ID: itemID });
+        if (!item || item.status !== 'IN_APPROVAL') req.error(400, 'Item not found or not in approval state');
+
         // 1. Update PR Status
-        await UPDATE(PurchaseRequisitions).set({ status: 'APPROVED' }).where({ ID: prID });
+        await UPDATE(PR_Items).set({ status: 'APPROVED' }).where({ ID: itemID });
 
         // 2. Auto Create Purchase Order
-        await createPOFromPR(prID);
+        await createPOFromPRItem(itemID);
+
+        await syncPRHeaderStatus(itemID);
         
-        return 'PR Approved & PO Created';
+        return 'Item Approved & PO Processed';
     });
 
-    this.on('rejectPR', async (req) => {
-        const { prID } = req.data;
-        await UPDATE(PurchaseRequisitions).set({ status: 'REJECTED' }).where({ ID: prID });
-        return 'PR Rejected';
+    this.on('rejectPRItem', async (req) => {
+        const { itemID, reason } = req.data;
+        
+        // 1. Update the specific item to REJECTED
+        await UPDATE(PR_Items).set({ status: 'REJECTED' }).where({ ID: itemID });
+        
+        // 2. (Optional) You might want to log the reason somewhere, or just return it
+        console.log(`Item ${itemID} rejected. Reason: ${reason}`);
+
+        // 3. Sync the header status (see point 2 below)
+        await syncPRHeaderStatus(itemID);
+
+        return 'Item Rejected';
     });
 
 
-    async function createPOFromPR(prID) {
-        const pr = await SELECT.one.from(PurchaseRequisitions).where({ ID: prID });
+    async function createPOFromPRItem(itemID) {
+        const prItem = await SELECT.one.from(PR_Items).where({ ID: itemID });
+        const pr = await SELECT.one.from(PurchaseRequisitions).where({ ID: prItem.pr_ID });
         
-        const items = await SELECT.from(PR_Items).where({ pr_ID: prID });
-        if (!items || items.length === 0) return;
-        
-        const prItem = items[0]; 
-        
-        const poID = cds.utils.uuid();
-
-        // 1. Create PO Header
-        await INSERT.into(PurchaseOrders).entries({
-            ID: poID,
-            poNumber: 'PO-' + Date.now(), 
-            pr_ID: prID,
-            vendor_ID: prItem.vendor_ID,
-            status: 'CREATED',
-            totalAmount: pr.totalAmount,
-            createdAt: new Date().toISOString()
+        let existingPO = await SELECT.one.from(PurchaseOrders).where({ 
+            pr_ID: pr.ID, 
+            vendor_ID: prItem.vendor_ID 
         });
+
+        let poID;
+        let itemTotal = prItem.quantity * prItem.price;
+        
+        if (existingPO) {
+            // Append to existing Vendor PO
+            poID = existingPO.ID;
+            await UPDATE(PurchaseOrders)
+                .set({ totalAmount: existingPO.totalAmount + itemTotal })
+                .where({ ID: poID });
+        } else {
+            // Create brand new PO for this Vendor
+            poID = cds.utils.uuid();
+            await INSERT.into(PurchaseOrders).entries({
+                ID: poID,
+                poNumber: 'PO-' + Date.now() + '-' + Math.floor(Math.random() * 100), // Unique identifier 
+                pr_ID: pr.ID,
+                vendor_ID: prItem.vendor_ID,
+                status: 'CREATED',
+                totalAmount: itemTotal,
+                createdAt: new Date().toISOString()
+            });
+        }
 
         // 2. Create single PO Item (strictly 1-to-1)
         await INSERT.into(PO_Items).entries({
@@ -275,4 +323,36 @@ module.exports = cds.service.impl(async function () {
             return req.error(500, "Backend failed: " + error.message);
         }
     });
+
+    // Add this helper function at the bottom of mm-service.js
+    async function syncPRHeaderStatus(itemID) {
+        // Find which PR this item belongs to
+        const prItem = await SELECT.one.from(PR_Items).where({ ID: itemID });
+        if (!prItem) return;
+
+        const prID = prItem.pr_ID;
+
+        // Fetch all items for this PR
+        const allItems = await SELECT.from(PR_Items).where({ pr_ID: prID });
+        
+        const totalItems = allItems.length;
+        const approvedItems = allItems.filter(i => i.status === 'APPROVED').length;
+        const rejectedItems = allItems.filter(i => i.status === 'REJECTED').length;
+
+        let newHeaderStatus = 'IN_APPROVAL';
+
+        // If every single item has been acted upon (none left in IN_APPROVAL)
+        if (approvedItems + rejectedItems === totalItems) {
+            if (approvedItems === totalItems) {
+                newHeaderStatus = 'APPROVED'; // All good
+            } else if (rejectedItems === totalItems) {
+                newHeaderStatus = 'REJECTED'; // All bad
+            } else {
+                newHeaderStatus = 'PARTIALLY_APPROVED'; // Mix of both
+            }
+            
+            // Update the header
+            await UPDATE(PurchaseRequisitions).set({ status: newHeaderStatus }).where({ ID: prID });
+        }
+    }
 });
