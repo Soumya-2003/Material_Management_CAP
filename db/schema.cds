@@ -58,7 +58,7 @@ entity PurchaseRequisitions {
     status        : String;
     totalAmount   : Decimal(15,2);
     createdAt     : Timestamp;
-    items       : Composition of one PR_Items
+    items       : Composition of many PR_Items
                           on items.pr = $self;
 }
 
@@ -79,7 +79,7 @@ entity PurchaseOrders {
         status      : POStatus default 'CREATED';
         totalAmount : Decimal(15, 2);
         createdAt   : Timestamp;
-        items       : Composition of one PO_Items
+        items       : Composition of many PO_Items
                           on items.parent = $self;
 }
 
@@ -96,7 +96,7 @@ entity GoodsReceipts {
         po       : Association to PurchaseOrders;
         status   : GRStatus default 'PENDING';
         postedAt : Timestamp;
-        items    : Composition of one GR_Items
+        items    : Composition of many GR_Items
                        on items.parent = $self;
 }
 
