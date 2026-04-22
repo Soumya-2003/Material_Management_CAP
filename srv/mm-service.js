@@ -10,7 +10,10 @@ module.exports = cds.service.impl(async function () {
         PurchaseOrders,
         PO_Items,
         Materials,
-        Vendors
+        Vendors,
+        GoodsReceipts,
+        GR_Items,
+        Stocks
     } = this.entities;
 
     this.on('saveDraft', async (req) => {
@@ -187,4 +190,69 @@ module.exports = cds.service.impl(async function () {
             console.error('Workflow trigger failed:', error.message);
         }
     }
+
+    this.on('acceptPO', async (req) => {
+        try {
+            const { poID } = req.data;
+            if (!poID) return req.error(400, 'PO ID is missing');
+
+            // 1. Fetch the PO
+            const po = await SELECT.one.from(PurchaseOrders).where({ ID: poID });
+            if (!po) return req.error(404, 'PO not found');
+            
+            // 2. Fetch PO Items
+            const poItems = await SELECT.from(PO_Items).where({ parent_ID: poID });
+            if (!poItems || poItems.length === 0) return req.error(400, 'No items in PO');
+
+            // 3. Update PO Status 
+            // Note: If 'COMPLETED' is not in your POStatus enum in common.cds, this will fail!
+            await UPDATE(PurchaseOrders).set({ status: 'COMPLETED' }).where({ ID: poID });
+
+            // 4. Create Goods Receipt Header
+            const grID = cds.utils.uuid();
+            await INSERT.into(GoodsReceipts).entries({
+                ID: grID,
+                po_ID: poID,
+                status: 'POSTED', // Note: Check if 'POSTED' is in your GRStatus enum!
+                postedAt: new Date().toISOString()
+            });
+
+            // 5. Process Items & Update Stock
+            for (const item of poItems) {
+                // Create GR Item
+                await INSERT.into(GR_Items).entries({
+                    ID: cds.utils.uuid(),
+                    parent_ID: grID,
+                    material_ID: item.material_ID,
+                    quantity: item.quantity || 0
+                });
+
+                // Update or Create Stock
+                const stock = await SELECT.one.from(Stocks).where({ material_ID: item.material_ID });
+                
+                if (stock) {
+                    // Safe math to prevent null crashing
+                    const currentQty = stock.quantity || 0;
+                    const addedQty = item.quantity || 0;
+
+                    await UPDATE(Stocks)
+                        .set({ quantity: currentQty + addedQty })
+                        .where({ material_ID: item.material_ID });
+                } else {
+                    await INSERT.into(Stocks).entries({
+                        ID: cds.utils.uuid(),
+                        material_ID: item.material_ID,
+                        quantity: item.quantity || 0
+                    });
+                }
+            }
+
+            return 'PO Accepted, Goods Receipt Generated, and Stock Updated!';
+
+        } catch (error) {
+            // This prevents the 502 Server Crash!
+            console.error("!!! CAP Server Error in acceptPO !!!", error);
+            return req.error(500, "Backend failed: " + error.message);
+        }
+    });
 });
