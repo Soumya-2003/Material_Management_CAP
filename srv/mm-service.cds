@@ -3,6 +3,7 @@ using {mm.app as db} from '../db/schema';
 service MMService @(requires: 'any') {
 
     entity DraftPurchaseRequisitions as projection on db.DraftPurchaseRequisitions;
+    entity DraftPR_Items as projection on db.DraftPR_Items;
 
     entity PurchaseRequisitions      as
         projection on db.PurchaseRequisitions {
@@ -14,7 +15,8 @@ service MMService @(requires: 'any') {
         projection on db.PR_Items {
             *,
             material.name as materialName : String,
-            vendor.name   as vendorName   : String
+            vendor.name   as vendorName   : String,
+            virtual 0     as statusCriticality : Integer
         };
 
     entity PurchaseOrders            as projection on db.PurchaseOrders;
@@ -27,12 +29,18 @@ service MMService @(requires: 'any') {
     entity Vendors                   as projection on db.Vendors;
     entity VendorMaterials           as projection on db.VendorMaterials;
 
-    action saveDraft(ID: UUID, material_ID: UUID, vendor_ID: UUID, quantity: Integer) returns UUID;
+    type DraftItemInput {
+        material_ID : UUID;
+        vendor_ID   : UUID;
+        quantity    : Integer;
+    }
+
+    action saveDraft(ID: UUID, items: array of DraftItemInput) returns UUID;
     action submitDraft(draftID: UUID)                                                 returns UUID;
     action createDraft()                                                              returns DraftPurchaseRequisitions;
 
-    action approvePR(prID: UUID)                                                      returns String;
-    action rejectPR(prID: UUID, reason: String)                                       returns String;
+    action approvePRItem(itemID: UUID) returns String;
+    action rejectPRItem(itemID: UUID, reason: String) returns String;
 
-    action acceptPO(poID: UUID)                                                       returns String;
+    action acceptPO(poID: UUID) returns String;
 }
