@@ -16,6 +16,26 @@ module.exports = cds.service.impl(async function () {
         Stocks
     } = this.entities;
 
+    this.after('READ', PurchaseRequisitions, each => {
+        if (!each.status) return; // Skip if status wasn't requested in the query
+        
+        switch (each.status) {
+            case 'APPROVED':
+                each.statusCriticality = 3; // 3 = Green
+                break;
+            case 'REJECTED':
+                each.statusCriticality = 1; // 1 = Red
+                break;
+            case 'IN_APPROVAL':
+                each.statusCriticality = 2; // 2 = Orange
+                break;
+            case 'DRAFT':
+            default:
+                each.statusCriticality = 0; // 0 = Grey
+                break;
+        }
+    });
+
     this.on('saveDraft', async (req) => {
         const { ID, material_ID, vendor_ID, quantity } = req.data;
         let totalAmount = 0;
