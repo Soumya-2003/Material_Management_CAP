@@ -24,6 +24,15 @@
   "private": true,
   "cds": {
     "requires": {
+      "db": {
+        "kind": "sqlite",
+        "[production]": {
+          "kind": "hana"
+        },
+        "[hybrid]": {
+          "kind": "hana"
+        }
+      },
       "auth": {
         "kind": "basic",
         "users": {
