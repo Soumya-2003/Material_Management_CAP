@@ -1,5 +1,5 @@
 const cds = require('@sap/cds');
-// const { executeHttpRequest } = require('@sap-cloud-sdk/http-client');
+const { executeHttpRequest } = require('@sap-cloud-sdk/http-client');
 
 module.exports = cds.service.impl(async function () {
 
@@ -48,7 +48,6 @@ module.exports = cds.service.impl(async function () {
             await DELETE.from(DraftPR_Items).where({ draft_ID: ID });
 
             const newItems = [];
-            // Safely iterate even if items is null
             for (let item of (items || [])) {
                 const material = await SELECT.one.from(Materials).where({ ID: item.material_ID });
                 let price = material ? material.price : 0;
@@ -88,7 +87,6 @@ module.exports = cds.service.impl(async function () {
             const ID = cds.utils.uuid();
             const prNumber = 'PR-' + Date.now();
 
-            
             const entry = {
                 ID: ID,
                 prNumber: prNumber,
@@ -141,19 +139,27 @@ module.exports = cds.service.impl(async function () {
 
         if (prItemsToInsert.length > 0) {
             await INSERT.into(PR_Items).entries(prItemsToInsert);
+
+            for (const item of prItemsToInsert) {
+                // Fetch names for the manager to see in the BPA Form
+                const mat = await SELECT.one.from(Materials).where({ ID: item.material_ID });
+                const ven = await SELECT.one.from(Vendors).where({ ID: item.vendor_ID });
+
+                await triggerWorkflow({
+                    itemID: item.ID,
+                    prNumber: draft.prNumber,
+                    materialName: mat ? mat.name : 'Unknown Material',
+                    vendorName: ven ? ven.name : 'Unknown Vendor',
+                    vendorRating: ven ? ven.rating : 0,
+                    quantity: item.quantity,
+                    itemTotal: item.quantity * item.price,
+                    requester: req.user.id || 'EMP001'
+                });
+            }
         }
 
         await DELETE.from(DraftPR_Items).where({ draft_ID: draftID });
         await DELETE.from(DraftPurchaseRequisitions).where({ ID: draftID });
-
-        // await triggerWorkflow({
-        //     prID: prID,
-        //     prNumber: draft.prNumber,
-        //     requester: 'EMP001',
-        //     manager: 'MGR001',
-        //     vendorRating: parseInt(vendorRating, 10) || 0,
-        //     totalAmount: parseFloat(draft.totalAmount) || 0
-        // });
 
         return prID;
     });
@@ -203,17 +209,15 @@ module.exports = cds.service.impl(async function () {
         let itemTotal = prItem.quantity * prItem.price;
         
         if (existingPO) {
-            // Append to existing Vendor PO
             poID = existingPO.ID;
             await UPDATE(PurchaseOrders)
                 .set({ totalAmount: existingPO.totalAmount + itemTotal })
                 .where({ ID: poID });
         } else {
-            // Create brand new PO for this Vendor
             poID = cds.utils.uuid();
             await INSERT.into(PurchaseOrders).entries({
                 ID: poID,
-                poNumber: 'PO-' + Date.now() + '-' + Math.floor(Math.random() * 100), // Unique identifier 
+                poNumber: 'PO-' + Date.now() + '-' + Math.floor(Math.random() * 100),  
                 pr_ID: pr.ID,
                 vendor_ID: prItem.vendor_ID,
                 status: 'CREATED',
@@ -234,26 +238,28 @@ module.exports = cds.service.impl(async function () {
 
     async function triggerWorkflow(payload) {
         try {
-            console.log('Calling BPA Workflow for PR:', payload.prNumber);
+            console.log('Calling BPA Workflow for PR:', payload.itemID);
             await executeHttpRequest(
                 { destinationName: 'bpaWorkflow-destination' }, 
                 {
                     method: 'POST',
                     url: '/workflow/rest/v1/workflow-instances',
                     data: {
-                        definitionId: 'us10.65d203eetrial.materialmanagementprworkflow1.pRApprovalProcess', 
+                        definitionId: 'us10.65d203eetrial.mmprapproval.pRApprovalProcess', 
                         context: {
-                            prid: payload.prID,
-                            prnumber: payload.prNumber,
-                            requester: payload.requester,
-                            manager: payload.manager,
-                            vendorrating: payload.vendorRating,
-                            totalamount: payload.totalAmount
-                        }
+                            item_id: payload.itemID,
+                            pr_number: payload.prNumber,
+                            material_name: payload.materialName,
+                            vendor_name: payload.vendorName,
+                            vendor_rating: payload.vendorRating,
+                            quantity: payload.quantity,
+                            item_total: payload.itemTotal,
+                            requester: payload.requester
+                        }      
                     }
                 }
             );
-            console.log('Workflow triggered successfully!');
+            console.log('Workflow triggered successfully for item!');
         } catch (error) {
             console.error('Workflow trigger failed:', error.message);
         }
