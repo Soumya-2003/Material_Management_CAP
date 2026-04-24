@@ -77,6 +77,7 @@ entity PR_Items {
     quantity      : Integer;
     price     : Decimal(15, 2);
     status      : String default 'IN_APPROVAL';
+    rejectionReason : String(255);
 }
 
 entity PurchaseOrders {
