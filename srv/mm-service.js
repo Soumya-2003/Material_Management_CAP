@@ -184,7 +184,7 @@ module.exports = cds.service.impl(async function () {
         const { itemID, reason } = req.data;
         
         // 1. Update the specific item to REJECTED
-        await UPDATE(PR_Items).set({ status: 'REJECTED' }).where({ ID: itemID });
+        await UPDATE(PR_Items).set({ status: 'REJECTED', rejectionReason: reason }).where({ ID: itemID });
         
         // 2. (Optional) You might want to log the reason somewhere, or just return it
         console.log(`Item ${itemID} rejected. Reason: ${reason}`);
@@ -193,6 +193,38 @@ module.exports = cds.service.impl(async function () {
         await syncPRHeaderStatus(itemID);
 
         return 'Item Rejected';
+    });
+
+    this.on('editRejectedItem', async (req) => {
+        const { itemID } = req.data;
+        const rejectedItem = await SELECT.one.from(PR_Items).where({ ID: itemID, status: 'REJECTED' });
+        if (!rejectedItem) return req.error(404, "Rejected item not found");
+
+        // 1. Create a new Draft Header for the user to edit
+        const draftID = cds.utils.uuid();
+        await INSERT.into(DraftPurchaseRequisitions).entries({
+            ID: draftID,
+            prNumber: 'PR-R-' + Date.now(),
+            totalAmount: rejectedItem.quantity * rejectedItem.price,
+            status: 'DRAFT',
+            createdAt: new Date().toISOString()
+        });
+
+        // 2. Copy the rejected item into the Draft Items table
+        await INSERT.into(DraftPR_Items).entries({
+            ID: cds.utils.uuid(),
+            draft_ID: draftID,
+            material_ID: rejectedItem.material_ID,
+            vendor_ID: rejectedItem.vendor_ID,
+            quantity: rejectedItem.quantity,
+            price: rejectedItem.price
+        });
+
+        // 3. Mark old item as 'RESUBMITTED' so it clears from the Rejected Dashboard
+        await UPDATE(PR_Items).set({ status: 'RESUBMITTED' }).where({ ID: itemID });
+        await syncPRHeaderStatus(itemID);
+
+        return draftID;
     });
 
 
@@ -344,11 +376,12 @@ module.exports = cds.service.impl(async function () {
         const totalItems = allItems.length;
         const approvedItems = allItems.filter(i => i.status === 'APPROVED').length;
         const rejectedItems = allItems.filter(i => i.status === 'REJECTED').length;
+        const resubmittedItems = allItems.filter(i => i.status === 'RESUBMITTED').length;
 
         let newHeaderStatus = 'IN_APPROVAL';
 
         // If every single item has been acted upon (none left in IN_APPROVAL)
-        if (approvedItems + rejectedItems === totalItems) {
+        if (approvedItems + rejectedItems + resubmittedItems === totalItems) {
             if (approvedItems === totalItems) {
                 newHeaderStatus = 'APPROVED'; // All good
             } else if (rejectedItems === totalItems) {
