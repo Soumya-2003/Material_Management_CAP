@@ -41,6 +41,7 @@ service MMService @(requires: 'any') {
 
     action approvePRItem(itemID: UUID) returns String;
     action rejectPRItem(itemID: UUID, reason: String) returns String;
+    action editRejectedItem(itemID: UUID) returns UUID;
 
     action acceptPO(poID: UUID) returns String;
 }
