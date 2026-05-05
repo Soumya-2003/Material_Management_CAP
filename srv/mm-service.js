@@ -141,19 +141,39 @@ module.exports = cds.service.impl(async function () {
         if (prItemsToInsert.length > 0) {
             await INSERT.into(PR_Items).entries(prItemsToInsert);
 
+            
+            const vendorGroups = {};
             for (const item of prItemsToInsert) {
-                const mat = await SELECT.one.from(Materials).where({ ID: item.material_ID });
-                const ven = await SELECT.one.from(Vendors).where({ ID: item.vendor_ID });
+                if (!vendorGroups[item.vendor_ID]) vendorGroups[item.vendor_ID] = [];
+                vendorGroups[item.vendor_ID].push(item);
+            }
+
+            for (const vendorID in vendorGroups) {
+                const groupItems = vendorGroups[vendorID];
+                const representativeItem = groupItems[0]; 
+
+                const ven = await SELECT.one.from(Vendors).where({ ID: vendorID });
+
+                let groupedMaterialNames = [];
+                let groupQuantity = 0;
+                let groupTotal = 0;
+
+                for (const item of groupItems) {
+                    const mat = await SELECT.one.from(Materials).where({ ID: item.material_ID });
+                    groupedMaterialNames.push(mat ? `${mat.name} (x${item.quantity})` : 'Item');
+                    groupQuantity += item.quantity;
+                    groupTotal += (item.quantity * item.price);
+                }
 
                 await triggerWorkflow({
-                    itemID: item.ID,
+                    itemID: representativeItem.ID, 
                     prNumber: draft.prNumber,
-                    materialName: mat ? mat.name : 'Unknown Material',
+                    materialName: groupedMaterialNames.join(' + '), 
                     vendorName: ven ? ven.name : 'Unknown Vendor',
                     vendorRating: ven ? ven.rating : 0,
-                    quantity: item.quantity,
-                    itemTotal: item.quantity * item.price,
-                    requester: req.user.id || 'EMP001'
+                    quantity: groupQuantity, 
+                    itemTotal: groupTotal,   
+                    requester: req.user?.id || 'EMP001'
                 });
             }
         }
@@ -166,28 +186,45 @@ module.exports = cds.service.impl(async function () {
 
     this.on('approvePRItem', async (req) => {
         const { itemID } = req.data;
-        const item = await SELECT.one.from(PR_Items).where({ ID: itemID });
-        if (!item || item.status !== 'IN_APPROVAL') req.error(400, 'Item not found or not in approval state');
+        const repItem = await SELECT.one.from(PR_Items).where({ ID: itemID });
+        if (!repItem) return req.error(400, 'Item not found');
 
-        await UPDATE(PR_Items).set({ status: 'APPROVED' }).where({ ID: itemID });
+        const groupItems = await SELECT.from(PR_Items).where({ 
+            pr_ID: repItem.pr_ID, 
+            vendor_ID: repItem.vendor_ID, 
+            status: 'IN_APPROVAL' 
+        });
 
-        await createPOFromPRItem(itemID);
+        for (const item of groupItems) {
+            await UPDATE(PR_Items).set({ status: 'APPROVED' }).where({ ID: item.ID });
+            
+            await createPOFromPRItem(item.ID); 
+            
+            await syncPRHeaderStatus(item.ID);
+        }
 
-        await syncPRHeaderStatus(itemID);
-
-        return 'Item Approved & PO Processed';
+        return 'Vendor Group Approved & PO Processed';
     });
 
     this.on('rejectPRItem', async (req) => {
         const { itemID, reason } = req.data;
+        
+        const repItem = await SELECT.one.from(PR_Items).where({ ID: itemID });
+        if (!repItem) return req.error(400, 'Item not found');
 
-        await UPDATE(PR_Items).set({ status: 'REJECTED', rejectionReason: reason }).where({ ID: itemID });
+        const groupItems = await SELECT.from(PR_Items).where({ 
+            pr_ID: repItem.pr_ID, 
+            vendor_ID: repItem.vendor_ID, 
+            status: 'IN_APPROVAL' 
+        });
 
-        console.log(`Item ${itemID} rejected. Reason: ${reason}`);
+        for (const item of groupItems) {
+            await UPDATE(PR_Items).set({ status: 'REJECTED', rejectionReason: reason }).where({ ID: item.ID });
+            await syncPRHeaderStatus(item.ID);
+        }
 
-        await syncPRHeaderStatus(itemID);
-
-        return 'Item Rejected';
+        console.log(`Vendor group rejected for PR ${repItem.prNumber}. Reason: ${reason}`);
+        return 'Vendor Group Rejected';
     });
 
     this.on('editRejectedItem', async (req) => {
