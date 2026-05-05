@@ -1,7 +1,7 @@
 namespace mm.app;
 
+using { managed } from '@sap/cds/common';
 using {mm.common.UserRole} from './common';
-// using {mm.common.PRStatus} from './common';
 using {mm.common.POStatus} from './common';
 using {mm.common.GRStatus} from './common';
 
@@ -41,12 +41,11 @@ entity VendorMaterials {
         material : Association to Materials;
 }
 
-entity DraftPurchaseRequisitions {
+entity DraftPurchaseRequisitions : managed {
     key ID        : UUID;
     prNumber      : String(20);
     totalAmount   : Decimal(15,2);
     status        : String default 'DRAFT';
-    createdAt     : Timestamp;
     items       : Composition of many DraftPR_Items on items.draft = $self;
 }
 
@@ -59,12 +58,11 @@ entity DraftPR_Items {
         price       : Decimal(15, 2);
 }
 
-entity PurchaseRequisitions {
+entity PurchaseRequisitions : managed {
     key ID        : UUID;
     prNumber      : String;
     status        : String;
     totalAmount   : Decimal(15,2);
-    createdAt     : Timestamp;
     items       : Composition of many PR_Items
                           on items.pr = $self;
 }
@@ -80,14 +78,13 @@ entity PR_Items {
     rejectionReason : String(255);
 }
 
-entity PurchaseOrders {
+entity PurchaseOrders : managed {
     key ID          : UUID;
         poNumber    : String(20);
         pr          : Association to PurchaseRequisitions;
         vendor      : Association to Vendors;
         status      : POStatus default 'CREATED';
         totalAmount : Decimal(15, 2);
-        createdAt   : Timestamp;
         items       : Composition of many PO_Items
                           on items.parent = $self;
 }

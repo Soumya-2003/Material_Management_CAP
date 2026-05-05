@@ -1,8 +1,5 @@
 using MMService from './mm-service';
 
-// ---------------------------------------------------------------------------
-// Annotations for Purchase Requisitions (Header)
-// ---------------------------------------------------------------------------
 annotate MMService.PurchaseRequisitions with @(
     UI: {
         HeaderInfo: {
@@ -12,13 +9,11 @@ annotate MMService.PurchaseRequisitions with @(
             Description: { $Type: 'UI.DataField', Value: status }
         },
         
-        // Fields to show in the Filter Bar at the top of the List Report
         SelectionFields: [
             prNumber,
             status
         ],
 
-        // Columns to show in the List Report table (No Action Buttons)
         LineItem: [
             { $Type: 'UI.DataField', Value: prNumber, Label: 'PR Number' },
             { $Type: 'UI.DataField', Value: totalAmount, Label: 'Total Amount' },
@@ -39,7 +34,6 @@ annotate MMService.PurchaseRequisitions with @(
             }
         ],
 
-        // Data Points for the Header Facets
         DataPoint#Status: {
             Value: status,
             Title: 'Current Status',
@@ -50,7 +44,6 @@ annotate MMService.PurchaseRequisitions with @(
             Title: 'Total Value'
         },
 
-        // Object Page Layout (Facets)
         Facets: [
             {
                 $Type: 'UI.ReferenceFacet',
@@ -66,21 +59,16 @@ annotate MMService.PurchaseRequisitions with @(
             }
         ],
 
-        // Data fields for the General Information section on the Object Page
         FieldGroup#GeneralInfo: {
             Data: [
                 { $Type: 'UI.DataField', Value: prNumber, Label: 'PR Number' },
-                // { $Type: 'UI.DataField', Value: status, Label: 'Status' },
-                // { $Type: 'UI.DataField', Value: totalAmount, Label: 'Total Amount' },
                 { $Type: 'UI.DataField', Value: createdAt, Label: 'Created At' }
             ]
         }
     }
 );
 
-// ---------------------------------------------------------------------------
-// Annotations for Purchase Requisition Items (Lines)
-// ---------------------------------------------------------------------------
+
 annotate MMService.PR_Items with @(
     UI: {
         LineItem: [
@@ -92,9 +80,7 @@ annotate MMService.PR_Items with @(
     }
 );
 
-// ---------------------------------------------------------------------------
-// Field Formatting and Value Helps (Optional but Recommended)
-// ---------------------------------------------------------------------------
+
 annotate MMService.PurchaseRequisitions with {
     ID @UI.Hidden;
     prNumber @readonly;

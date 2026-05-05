@@ -36,8 +36,8 @@ service MMService @(requires: 'any') {
     }
 
     action saveDraft(ID: UUID, items: array of DraftItemInput) returns UUID;
-    action submitDraft(draftID: UUID)                                                 returns UUID;
-    action createDraft()                                                              returns DraftPurchaseRequisitions;
+    action submitDraft(draftID: UUID) returns UUID;
+    action createDraft() returns DraftPurchaseRequisitions;
 
     action approvePRItem(itemID: UUID) returns String;
     action rejectPRItem(itemID: UUID, reason: String) returns String;
